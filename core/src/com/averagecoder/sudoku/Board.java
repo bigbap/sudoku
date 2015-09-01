@@ -21,27 +21,23 @@ public class Board {
 
     private String boardKey;
     private String currBoard;
-    private TextureAtlas atlas;
-    private ShapeRenderer shapeRenderer;
+    private TextureAtlas atlasNumbers;
+    TextureAtlas atlasNumbersActive;
     private Array<Tiles> tiles = new Array<Tiles>();
     OrthographicCamera camera;
     Tiles activeTile = null;
+    int boardActiveNum = 0;
 
     static final int TILE_SIZE = 64;
-    static Array<TextureRegion> numbers = new Array<TextureRegion>();
 
-    public Board(TextureAtlas a, OrthographicCamera cam, ShapeRenderer s){
-        atlas = a;
+    public Board(TextureAtlas an, TextureAtlas ana, OrthographicCamera cam){
+        atlasNumbers = an;
+        atlasNumbersActive = ana;
 
         String puzzleStr = resetBoard(5);
         currBoard = puzzleStr.substring(0, 81);
         boardKey = puzzleStr.substring(81, 81*2);
-        shapeRenderer = s;
         camera = cam;
-
-        for(int i = 1; i < 10; i++){
-            numbers.add(atlas.findRegion("number"+i));
-        }
 
         Vector2 pos = new Vector2(TILE_SIZE / 2, 256);
         for (int r = 0; r < 9; r++){
@@ -77,21 +73,31 @@ public class Board {
 
         // Choose a random one from the list
         Random r = new Random();
-        String randomString = lines.get(r.nextInt(lines.size()));
 
-        return randomString;
+        return lines.get(r.nextInt(lines.size()));
     }
 
     public void update(float delta){
         if(Gdx.input.justTouched()){
             Vector3 pos = new Vector3(Gdx.input.getX(), Gdx.input.getY(), 0);
-            camera.unproject(pos);
+            Sudoku.viewport.unproject(pos);
+
+            for(SudokuMain.Nums n: SudokuMain.numbers){
+                if(n.pos.x <= pos.x && n.pos.x + n.size >= pos.x && n.pos.y <= pos.y && n.pos.y + n.size >= pos.y){
+                    SudokuMain.activeNum = n.num;
+                    n.active = true;
+                }
+            }
+            for(SudokuMain.Nums n: SudokuMain.numbers){
+                if(n.num != SudokuMain.activeNum){
+                    n.active = false;
+                }
+            }
 
             for(Tiles t: tiles){
-                if(t.pos.x < pos.x && t.pos.x + t.size > pos.x && t.pos.y < pos.y && t.pos.y + t.size > pos.y){
+                if(t.pos.x <= pos.x && t.pos.x + t.size >= pos.x && t.pos.y <= pos.y && t.pos.y + t.size >= pos.y && SudokuMain.activeNum > 0){
                     activeTile = t;
                     t.active = true;
-                    System.out.println(t.num);
                 }
             }
             for(Tiles t: tiles){
@@ -103,32 +109,15 @@ public class Board {
     }
 
     public void draw(SpriteBatch batch){
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setAutoShapeType(true);
-        for(int i = 0; i < tiles.size; i++){
-            tiles.get(i).drawSquares();
-        }
-
-        Vector2 pos = new Vector2(TILE_SIZE / 2, 256);
-        shapeRenderer.setColor(0, 0, 0, 1);
-        shapeRenderer.rect((int) pos.x, (int) pos.y, TILE_SIZE * 9, TILE_SIZE * 9);
-        shapeRenderer.rect((int) pos.x - 1, (int) pos.y - 1, (TILE_SIZE * 9) + 2, (TILE_SIZE * 9) + 2);
-
-        for(int x = 0; x < 3; x++){
-            for(int y = 0; y < 3; y++){
-                shapeRenderer.rect((int)pos.x + 1, (int)pos.y + 1, (TILE_SIZE * 3) - 2, (TILE_SIZE * 3) - 2);
-                pos.x += TILE_SIZE * 3;
-            }
-            pos.y += TILE_SIZE * 3;
-            pos.x = TILE_SIZE / 2;
-        }
-
-        shapeRenderer.end();
 
         batch.begin();
+
         for(int i = 0; i < tiles.size; i++){
             tiles.get(i).drawNums(batch);
         }
+
+        batch.draw(Sudoku.atlasUI.findRegion("bg"), TILE_SIZE / 2, 256);
+
         batch.end();
     }
 
@@ -148,31 +137,24 @@ public class Board {
         private int size;
         private int num;
         private boolean active = false;
+        boolean locked = false;
 
         public Tiles(Vector2 p, int s, int n){
             this.pos.x = p.x;
             this.pos.y = p.y;
             this.size = s;
             this.num = n;
-        }
-
-        public void drawSquares(){
-            if(active) {
-                shapeRenderer.setColor(0.9f, 0.9f, 0.5f, 1);
-                shapeRenderer.set(ShapeRenderer.ShapeType.Filled);
-
-                shapeRenderer.rect((int) pos.x, (int) pos.y, size, size);
-
-                shapeRenderer.set(ShapeRenderer.ShapeType.Line);
-            }
-
-            shapeRenderer.setColor(0, 0, 0, 1);
-            shapeRenderer.rect((int) pos.x, (int) pos.y, size, size);
+            this.locked = n!= 0;
         }
 
         public void drawNums(SpriteBatch batch){
             if(num > 0){
-                TextureRegion thisNum = numbers.get(num-1);
+                if(this.num == boardActiveNum)
+                    batch.draw(Sudoku.atlasUI.findRegion("selected"), (int)pos.x, (int)pos.y);
+                else if(locked)
+                    batch.draw(Sudoku.atlasUI.findRegion("locked"), (int)pos.x, (int)pos.y);
+
+                TextureRegion thisNum = this.active && !this.locked ? atlasNumbersActive.findRegion("number" + num) : atlasNumbers.findRegion("number" + num);
                 batch.draw(thisNum, (int)pos.x + (size / 2) - (thisNum.getRegionWidth() / 2), (int)pos.y + (size / 2) - (thisNum.getRegionHeight() / 2));
             }
         }
